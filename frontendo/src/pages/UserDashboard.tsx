@@ -18,7 +18,11 @@ import {
   Clock
 } from "lucide-react";
 
-export const UserDashboard = () => {
+interface UserDashboardProps {
+  isNewUser?: boolean;
+}
+
+export const UserDashboard = ({ isNewUser = false }: UserDashboardProps) => {
   // Hardcoded higher score and short history
   const riskScore = 78; // "a lil high"
   const riskLevel = riskScore <= 40 ? "Low" : riskScore <= 70 ? "Moderate" : "High";
@@ -61,6 +65,33 @@ export const UserDashboard = () => {
     { date: "2025-08-28", score: 71, trend: "stable" },
     { date: "2025-08-21", score: 66, trend: "up" },
   ];
+
+  if (isNewUser) {
+    return (
+      <div className="p-6 space-y-6 max-w-4xl mx-auto">
+        <div className="bg-gradient-to-r from-primary/10 to-healing-green/10 rounded-lg p-6 text-center">
+          <h1 className="text-2xl font-bold mb-2">Welcome to Overcome!</h1>
+          <p className="text-muted-foreground">
+            Let’s start with your first Voice Quiz to personalize your dashboard.
+          </p>
+        </div>
+
+        <Card className="text-center">
+          <CardContent className="p-8">
+            <Mic className="h-10 w-10 text-primary mx-auto mb-4" />
+            <h3 className="font-semibold mb-2">Begin Your Journey</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Take the voice quiz now to generate your initial insights.
+            </p>
+            <Button onClick={() => {
+              const evt = new CustomEvent("navigate", { detail: { page: "quiz" } });
+              window.dispatchEvent(evt);
+            }}>Take the Voice Quiz</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">

@@ -30,9 +30,11 @@ export const VoiceQuiz = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordedAudio, setRecordedAudio] = useState<string | null>(null);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
   const [quizComplete, setQuizComplete] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [transcript, setTranscript] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -50,9 +52,10 @@ export const VoiceQuiz = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordedAudio(audioUrl);
+        setRecordedBlob(audioBlob);
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -82,22 +85,68 @@ export const VoiceQuiz = () => {
     }
   };
 
-  const processAnswer = () => {
+  const processAnswer = async () => {
+    if (!recordedBlob) {
+      toast({
+        variant: "destructive",
+        title: "No Audio",
+        description: "Please record your response before analyzing.",
+      });
+      return;
+    }
+
     setIsProcessing(true);
-    
-    // Simulate AI processing
-    setTimeout(() => {
-      const newAnswers = [...answers, `Answer ${currentQuestion + 1} processed`];
+    setTranscript(null);
+
+    try {
+      const form = new FormData();
+      form.append("audio", recordedBlob, "response.webm");
+      form.append("language", "en-US");
+
+      const res = await fetch("http://localhost:5000/transcribe", {
+        method: "POST",
+        body: form,
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Transcription failed (${res.status})`);
+      }
+
+      const text: string | undefined = data?.transcript;
+      if (!text) {
+        throw new Error("No transcript received");
+      }
+      setTranscript(text);
+
+      // brief delay to let the animation show with transcript
+      await new Promise((r) => setTimeout(r, 1200));
+
+      const newAnswers = [...answers, text];
       setAnswers(newAnswers);
       setRecordedAudio(null);
+      setRecordedBlob(null);
       setIsProcessing(false);
-      
+
       if (currentQuestion < questions.length - 1) {
         setCurrentQuestion(currentQuestion + 1);
       } else {
         setQuizComplete(true);
+        // Notify app that first quiz is complete so dashboard can enable
+        try {
+          const evt = new CustomEvent("first-quiz-complete");
+          window.dispatchEvent(evt);
+        } catch {}
       }
-    }, 3000);
+    } catch (error: any) {
+      setIsProcessing(false);
+      toast({
+        variant: "destructive",
+        title: "Transcription Error",
+        description: error?.message || "Failed to transcribe audio.",
+      });
+    }
   };
 
   const progress = ((currentQuestion + 1) / questions.length) * 100;
@@ -261,7 +310,7 @@ export const VoiceQuiz = () => {
                 </div>
                 
                 <audio controls className="w-full mb-4">
-                  <source src={recordedAudio} type="audio/wav" />
+                  <source src={recordedAudio} type="audio/webm" />
                   Your browser does not support the audio element.
                 </audio>
 
@@ -313,6 +362,13 @@ export const VoiceQuiz = () => {
                     <span className="text-sm">Voice pattern recognition</span>
                   </div>
                 </div>
+
+                {transcript && (
+                  <div className="mt-6 text-left p-4 rounded-lg bg-muted/30">
+                    <div className="text-xs text-muted-foreground mb-1">Transcript</div>
+                    <div className="text-sm">{transcript}</div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

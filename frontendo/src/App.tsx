@@ -29,6 +29,7 @@ const App = () => {
   const [appState, setAppState] = useState<AppState>("roleSelection");
   const [userType, setUserType] = useState<UserType>("user");
   const [currentPage, setCurrentPage] = useState<CurrentPage>("dashboard");
+  const [isNewUser, setIsNewUser] = useState(false);
 
   // Listen to simple navigation events from child components (e.g., dashboard quick actions)
   // so they can request page changes without prop drilling.
@@ -41,8 +42,13 @@ const App = () => {
       }
     };
     window.addEventListener("navigate", handler as EventListener);
+    const firstQuizHandler = () => {
+      setIsNewUser(false);
+    };
+    window.addEventListener("first-quiz-complete", firstQuizHandler as EventListener);
     return () => {
       window.removeEventListener("navigate", handler as EventListener);
+      window.removeEventListener("first-quiz-complete", firstQuizHandler as EventListener);
     };
   }, []);
 
@@ -51,14 +57,16 @@ const App = () => {
     setAppState(role === "user" ? "userLogin" : "therapistLogin");
   };
 
-  const handleLogin = () => {
+  const handleLogin = (newUser?: boolean) => {
     setAppState(userType === "user" ? "userApp" : "therapistApp");
-    setCurrentPage("dashboard");
+    setIsNewUser(newUser || false);
+    setCurrentPage(newUser ? "quiz" : "dashboard");
   };
 
   const handleLogout = () => {
     setAppState("roleSelection");
     setCurrentPage("dashboard");
+    setIsNewUser(false);
   };
 
   const handleNavigation = (page: string) => {
@@ -67,9 +75,14 @@ const App = () => {
 
   const renderCurrentPage = () => {
     if (appState === "userApp") {
+      // For new users, show welcome screen on dashboard
+      if (currentPage === "dashboard" && isNewUser) {
+        return <UserDashboard isNewUser={true} />;
+      }
+      
       switch (currentPage) {
         case "dashboard":
-          return <UserDashboard />;
+          return <UserDashboard isNewUser={false} />;
         case "quiz":
           return <VoiceQuiz />;
         case "reports":
@@ -79,7 +92,7 @@ const App = () => {
         case "profile":
           return <UserProfile />;
         default:
-          return <UserDashboard />;
+          return <UserDashboard isNewUser={false} />;
       }
     } else if (appState === "therapistApp") {
       switch (currentPage) {

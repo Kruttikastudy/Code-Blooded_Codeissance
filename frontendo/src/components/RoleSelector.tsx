@@ -39,13 +39,13 @@ export const RoleSelector = ({ onSelectRole }: RoleSelectorProps) => {
               </div>
               <CardTitle className="text-2xl">I'm a User</CardTitle>
               <CardDescription className="text-base">
-                Access personalized mental health insights and support
+                Access personalized mental health insights
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <ul className="text-sm text-muted-foreground space-y-2 mb-6">
                 <li>• Voice-based depression screening</li>
-                <li>• Personal progress tracking</li>
+                <li>• Personal progress tracking with AI</li>
                 <li>• AI-powered insights</li>
                 <li>• Therapist consultations</li>
               </ul>
