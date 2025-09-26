@@ -189,7 +189,7 @@ export const VoiceQuiz = () => {
               <span>Voice Recording</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-center">
+          <CardContent className="text-center min-h-[420px] flex flex-col justify-center">
             {!isRecording && !recordedAudio && !isProcessing && (
               <div className="space-y-6">
                 <div className="p-8">

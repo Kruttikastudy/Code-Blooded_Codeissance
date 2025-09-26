@@ -47,7 +47,7 @@ export const Navigation = ({ userType, currentPage, onNavigate, onLogout }: Navi
               <Heart className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold">Voice Analysis</h1>
+              <h1 className="text-lg font-semibold">Overcome</h1>
               <p className="text-xs text-muted-foreground capitalize">
                 {userType} Portal
               </p>

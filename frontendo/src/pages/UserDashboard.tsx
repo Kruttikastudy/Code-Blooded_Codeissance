@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 
 export const UserDashboard = () => {
-  // Mock data - in real app, this would come from API
-  const riskScore = 35; // Low risk (0-40: Low, 41-70: Moderate, 71-100: High)
+  // Hardcoded higher score and short history
+  const riskScore = 78; // "a lil high"
   const riskLevel = riskScore <= 40 ? "Low" : riskScore <= 70 ? "Moderate" : "High";
   const riskColor = riskScore <= 40 ? "text-success" : riskScore <= 70 ? "text-warning" : "text-destructive";
 
@@ -56,10 +56,10 @@ export const UserDashboard = () => {
   ];
 
   const recentAnalyses = [
-    { date: "2024-01-15", score: 28, trend: "down" },
-    { date: "2024-01-10", score: 35, trend: "up" },
-    { date: "2024-01-05", score: 32, trend: "stable" },
-    { date: "2023-12-30", score: 40, trend: "up" },
+    { date: "2025-09-12", score: 74, trend: "up" },
+    { date: "2025-09-05", score: 69, trend: "up" },
+    { date: "2025-08-28", score: 71, trend: "stable" },
+    { date: "2025-08-21", score: 66, trend: "up" },
   ];
 
   return (
@@ -241,7 +241,10 @@ export const UserDashboard = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Complete your next voice analysis session
             </p>
-            <Button className="w-full">Start Quiz</Button>
+            <Button className="w-full" onClick={() => {
+              const evt = new CustomEvent("navigate", { detail: { page: "quiz" } });
+              window.dispatchEvent(evt);
+            }}>Start Quiz</Button>
           </CardContent>
         </Card>
 
@@ -263,7 +266,10 @@ export const UserDashboard = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Book a session with a therapist
             </p>
-            <Button variant="outline" className="w-full">View Calendar</Button>
+            <Button variant="outline" className="w-full" onClick={() => {
+              const evt = new CustomEvent("navigate", { detail: { page: "appointments" } });
+              window.dispatchEvent(evt);
+            }}>View Calendar</Button>
           </CardContent>
         </Card>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,7 +10,14 @@ import { TherapistLogin } from "@/pages/TherapistLogin";
 import { UserDashboard } from "@/pages/UserDashboard";
 import { TherapistDashboard } from "@/pages/TherapistDashboard";
 import { VoiceQuiz } from "@/pages/VoiceQuiz";
+import Reports from "@/pages/Reports";
+import Appointments from "@/pages/Appointments";
+import UserProfile from "@/pages/UserProfile";
 import { Navigation } from "@/components/Navigation";
+import TherapistClients from "@/pages/TherapistClients";
+import TherapistSessions from "@/pages/TherapistSessions";
+import TherapistSchedule from "@/pages/TherapistSchedule";
+import TherapistProfile from "@/pages/TherapistProfile";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +29,22 @@ const App = () => {
   const [appState, setAppState] = useState<AppState>("roleSelection");
   const [userType, setUserType] = useState<UserType>("user");
   const [currentPage, setCurrentPage] = useState<CurrentPage>("dashboard");
+
+  // Listen to simple navigation events from child components (e.g., dashboard quick actions)
+  // so they can request page changes without prop drilling.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { page?: string } | undefined;
+      if (detail?.page) {
+        setCurrentPage(detail.page as CurrentPage);
+      }
+    };
+    window.addEventListener("navigate", handler as EventListener);
+    return () => {
+      window.removeEventListener("navigate", handler as EventListener);
+    };
+  }, []);
 
   const handleRoleSelection = (role: UserType) => {
     setUserType(role);
@@ -50,11 +73,11 @@ const App = () => {
         case "quiz":
           return <VoiceQuiz />;
         case "reports":
-          return <div className="p-6 text-center text-muted-foreground">Reports page coming soon...</div>;
+          return <Reports />;
         case "appointments":
-          return <div className="p-6 text-center text-muted-foreground">Appointments page coming soon...</div>;
+          return <Appointments />;
         case "profile":
-          return <div className="p-6 text-center text-muted-foreground">Profile page coming soon...</div>;
+          return <UserProfile />;
         default:
           return <UserDashboard />;
       }
@@ -63,13 +86,13 @@ const App = () => {
         case "dashboard":
           return <TherapistDashboard />;
         case "clients":
-          return <div className="p-6 text-center text-muted-foreground">Client list page coming soon...</div>;
+          return <TherapistClients />;
         case "sessions":
-          return <div className="p-6 text-center text-muted-foreground">Session notes page coming soon...</div>;
+          return <TherapistSessions />;
         case "appointments":
-          return <div className="p-6 text-center text-muted-foreground">Schedule page coming soon...</div>;
+          return <TherapistSchedule />;
         case "profile":
-          return <div className="p-6 text-center text-muted-foreground">Profile page coming soon...</div>;
+          return <TherapistProfile />;
         default:
           return <TherapistDashboard />;
       }
