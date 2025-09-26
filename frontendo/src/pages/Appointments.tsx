@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
+import { VideoIcon } from "lucide-react";
 
 const THERAPISTS = [
   { id: "t1", name: "Dr. Aisha Sharma", specialization: "Clinical Psychologist" },
@@ -20,12 +21,37 @@ export const Appointments = () => {
   const [therapistId, setTherapistId] = useState<string>(THERAPISTS[0].id);
   const [slot, setSlot] = useState<string>(SLOTS[0]);
   const [note, setNote] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [meetLink, setMeetLink] = useState<string>("");
 
   const selectedTherapist = THERAPISTS.find(t => t.id === therapistId)!;
 
   const handleBook = () => {
     const humanDate = date ? format(date, "EEEE, dd MMM yyyy") : "Select date";
     alert(`Booked ${selectedTherapist.name} on ${humanDate} at ${slot}.\nNote: ${note || "(none)"}`);
+  };
+  
+  const handleJoinSession = async () => {
+    if (!date) return;
+    
+    setIsLoading(true);
+    try {
+      // Hardcoded Google Meet link for demonstration purposes
+      const hardcodedMeetLink = "https://meet.google.com/rec-peqo-ehr";
+      
+      // Set the meet link and open it in a new tab
+      setMeetLink(hardcodedMeetLink);
+      window.open(hardcodedMeetLink, "_blank");
+      
+      // Simulate a short delay for UI feedback
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 500);
+    } catch (error) {
+      console.error("Error opening meeting link:", error);
+      alert("An error occurred. Please try again later.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -87,9 +113,25 @@ export const Appointments = () => {
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Brief context you'd like to share…" />
             </div>
 
-            <Button className="w-full" onClick={handleBook} disabled={!date}>
-              Confirm Booking
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button className="w-full" onClick={handleBook} disabled={!date}>
+                Confirm Booking
+              </Button>
+              
+              <Button 
+                className="w-full" 
+                variant="outline" 
+                onClick={handleJoinSession} 
+                disabled={!date || isLoading}
+              >
+                {isLoading ? "Creating session..." : (
+                  <>
+                    <VideoIcon className="mr-2 h-4 w-4" />
+                    Join Session
+                  </>
+                )}
+              </Button>
+            </div>
 
             <div className="text-sm text-muted-foreground">
               Selected: {date ? format(date, "dd MMM yyyy") : "No date"} at {slot}
