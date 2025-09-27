@@ -107,6 +107,7 @@ app.post('/api/create-meeting', async (req, res) => {
 });
 
 // API endpoint to process audio and get transcription
+// API endpoint to process audio, transcribe, and predict depression
 app.post('/api/process-audio', upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) {
@@ -115,77 +116,99 @@ app.post('/api/process-audio', upload.single('audio'), async (req, res) => {
 
     const audioFilePath = req.file.path;
     const language = req.body.language || 'en-US';
-    const outputFileName = `transcript_${path.basename(audioFilePath, path.extname(audioFilePath))}.txt`;
-    const outputFilePath = path.join(__dirname, 'transcripts', outputFileName);
 
-    // Create transcripts directory if it doesn't exist
-    const transcriptsDir = path.join(__dirname, 'transcripts');
-    if (!fs.existsSync(transcriptsDir)) {
-      fs.mkdirSync(transcriptsDir, { recursive: true });
-    }
-
-    // Run the Python script to process the audio
-    const pythonProcess = spawn('python', [
+    // Run the Python transcription script (modified to only print transcript)
+    const pythonSTT = spawn('python', [
+      '-u',
       path.join(__dirname, '..', 'speechToText', 'speech_to_text.py'),
       audioFilePath,
-      language,
-      outputFilePath
+      language
     ]);
 
     let transcript = '';
     let error = '';
 
-    pythonProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      console.log('Python output:', output);
-      if (output.includes('Transcription:')) {
-        transcript = output.split('Transcription:')[1].trim().split('\n')[0];
-      }
+    pythonSTT.stdout.on('data', (data) => {
+      transcript += data.toString();
     });
 
-    pythonProcess.stderr.on('data', (data) => {
+    pythonSTT.stderr.on('data', (data) => {
       error += data.toString();
-      console.error('Python error:', data.toString());
+      console.error('Python STT error:', data.toString());
     });
 
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        return res.status(500).json({ 
-          success: false, 
-          error: `Process exited with code ${code}: ${error}` 
-        });
+    pythonSTT.on('close', (code) => {
+      if (code !== 0 || !transcript.trim()) {
+        return res.status(500).json({ success: false, error: error || 'Transcription failed' });
       }
 
-      // If transcript wasn't captured from stdout, try to read from the file
-      if (!transcript && fs.existsSync(outputFilePath)) {
-        try {
-          transcript = fs.readFileSync(outputFilePath, 'utf8');
-        } catch (readError) {
-          console.error('Error reading transcript file:', readError);
+      // Step 2: Call predict_depression.py with transcript
+      const pythonPredict = spawn('python', [
+        path.join(__dirname, 'predict_depression.py'),
+        audioFilePath,
+        transcript.trim()
+      ]);
+
+      let result = '';
+      pythonPredict.stdout.on('data', (data) => {
+        result += data.toString();
+      });
+
+      pythonPredict.stderr.on('data', (data) => {
+        console.error('Python predict error:', data.toString());
+      });
+
+      pythonPredict.on('close', (code) => {
+        if (code !== 0) {
+          return res.status(500).json({ success: false, error: 'Prediction failed' });
         }
-      }
 
-      // Simple sentiment analysis (placeholder for ML model)
-      const sentimentScore = analyzeSentiment(transcript);
-
-      res.json({
-        success: true,
-        transcript,
-        outputFile: outputFilePath,
-        analysis: {
-          sentiment: sentimentScore,
-          keywords: extractKeywords(transcript)
+        try {
+          const prediction = JSON.parse(result);
+          res.json({
+            success: true,
+            transcript: transcript.trim(),
+            prediction
+          });
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          res.status(500).json({ success: false, error: 'Invalid prediction output' });
         }
       });
     });
   } catch (error) {
     console.error('Error processing audio:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process audio'
-    });
+    res.status(500).json({ success: false, error: 'Failed to process audio' });
   }
 });
+
+//endpoint for prediction
+app.post('/api/predict-depression', async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ success: false, error: 'No text provided' });
+
+  const { spawn } = require('child_process');
+  const pythonProcess = spawn('python', ['predict_depression.py', text]);
+
+  let result = '';
+  let error = '';
+
+  pythonProcess.stdout.on('data', (data) => {
+    result += data.toString();
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    error += data.toString();
+    console.error('Python error:', data.toString());
+  });
+
+  pythonProcess.on('close', (code) => {
+    if (code !== 0) return res.status(500).json({ success: false, error: error });
+    const prediction = JSON.parse(result);
+    res.json({ success: true, depression: prediction });
+  });
+});
+
 
 // Simple sentiment analysis function (placeholder for ML model)
 function analyzeSentiment(text) {
