@@ -35,12 +35,27 @@ export const VoiceQuiz = () => {
   const [quizComplete, setQuizComplete] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
-  
+  const [processingQueue, setProcessingQueue] = useState<{ blob: Blob; questionIndex: number }[]>([]);
+  const [scores, setScores] = useState<number[]>([]);
+  const [allRecorded, setAllRecorded] = useState(false);
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [showSOS, setShowSOS] = useState(false);
+
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const { toast } = useToast();
 
   const startRecording = async () => {
+    if (currentQuestion >= questions.length || answers[currentQuestion]) {
+    toast({
+      variant: "destructive",
+      title: "Quiz Complete",
+      description: "You have already answered all questions.",
+    });
+    return;
+  }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -85,71 +100,96 @@ export const VoiceQuiz = () => {
     }
   };
 
-  const processAnswer = async () => {
-    if (!recordedBlob) {
-      toast({
-        variant: "destructive",
-        title: "No Audio",
-        description: "Please record your response before analyzing.",
-      });
-      return;
-    }
+  const processAnswer = () => {
+  if (!recordedBlob) {
+    toast({
+      variant: "destructive",
+      title: "No Audio",
+      description: "Please record your response before analyzing.",
+    });
+    return;
+  }
 
-    setIsProcessing(true);
-    setTranscript(null);
+  // Queue blob for background processing
+  setProcessingQueue((prev) => [
+    ...prev,
+    { blob: recordedBlob, questionIndex: currentQuestion }
+  ]);
+
+  // Reset state for UI
+  setRecordedAudio(null);
+  setRecordedBlob(null);
+
+  // Move to next question immediately
+  if (currentQuestion < questions.length - 1) {
+    setCurrentQuestion((prev) => prev + 1);
+  } else {
+    setQuizComplete(true);
+    window.dispatchEvent(new CustomEvent("first-quiz-complete"));
+  }
+};
+
+
+
+
+  const progress = ((currentQuestion + 1) / questions.length) * 100;
+
+  useEffect(() => {
+    if (allRecorded && answers.length==questions.length) {
+      setQuizComplete(true);
+    }
+  }, [allRecorded, answers]);
+
+
+  useEffect(() => {
+  if (processingQueue.length === 0) return;
+
+  const next = processingQueue[0];
+
+  const processBlob = async (blob: Blob, questionIndex: number) => {
+    const form = new FormData();
+    form.append("audio", blob, "response.webm");
+    form.append("language", "en-US");
 
     try {
-      const form = new FormData();
-      form.append("audio", recordedBlob, "response.webm");
-      form.append("language", "en-US");
-
-      const res = await fetch("http://localhost:5000/transcribe", {
+      const res = await fetch("http://localhost:5000/api/process-audio", {
         method: "POST",
         body: form,
       });
-
       const data = await res.json();
-      
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `Transcription failed (${res.status})`);
+
+      if (data.success && data.transcript) {
+        setTranscript(data.transcript);
+        setAnswers((prev) => {
+          const newArr = [...prev];
+          newArr[next.questionIndex] = data.transcript;
+          return newArr;
+        });
       }
-
-      const text: string | undefined = data?.transcript;
-      if (!text) {
-        throw new Error("No transcript received");
+      if (data.success && data.prediction) {
+        const score = data.prediction.risk_score ?? 0; 
+        setScores((prev) => {
+          const newScores = [...prev];
+          newScores[next.questionIndex] = score;
+          return newScores;
+        });
       }
-      setTranscript(text);
-
-      // brief delay to let the animation show with transcript
-      await new Promise((r) => setTimeout(r, 1200));
-
-      const newAnswers = [...answers, text];
-      setAnswers(newAnswers);
-      setRecordedAudio(null);
-      setRecordedBlob(null);
-      setIsProcessing(false);
-
-      if (currentQuestion < questions.length - 1) {
-        setCurrentQuestion(currentQuestion + 1);
-      } else {
-        setQuizComplete(true);
-        // Notify app that first quiz is complete so dashboard can enable
-        try {
-          const evt = new CustomEvent("first-quiz-complete");
-          window.dispatchEvent(evt);
-        } catch {}
-      }
-    } catch (error: any) {
-      setIsProcessing(false);
-      toast({
-        variant: "destructive",
-        title: "Transcription Error",
-        description: error?.message || "Failed to transcribe audio.",
-      });
+    } catch (error) {
+      console.error("Processing failed:", error);
+    } finally {
+      // Remove from queue
+      setProcessingQueue((prev) => prev.slice(1));
     }
   };
 
-  const progress = ((currentQuestion + 1) / questions.length) * 100;
+  processBlob(next.blob, next.questionIndex);
+  }, [processingQueue]);
+
+  const averageScore = () => {
+    if (scores.length === 0) return 0;
+    return scores.reduce((a, b) => a + b, 0) / scores.length;
+  };
+
 
   if (quizComplete) {
     return (
@@ -168,6 +208,13 @@ export const VoiceQuiz = () => {
               Your voice analysis has been processed. The AI is now generating 
               your personalized mental health insights.
             </p>
+
+            <div className="mb-8 p-6 bg-primary/10 rounded-lg">
+          <h2 className="text-lg font-semibold mb-2">Average Depression Score</h2>
+          <p className="text-3xl font-bold text-primary">
+            {averageScore().toFixed(2)}
+          </p>
+        </div>
             
             <div className="space-y-4 mb-8">
               <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
@@ -183,11 +230,6 @@ export const VoiceQuiz = () => {
                 <CheckCircle className="h-5 w-5 text-success" />
               </div>
             </div>
-
-            <Button size="lg" className="px-8">
-              View Your Results
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -230,7 +272,6 @@ export const VoiceQuiz = () => {
           </CardContent>
         </Card>
 
-        {/* Recording Interface */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -314,16 +355,27 @@ export const VoiceQuiz = () => {
                   Your browser does not support the audio element.
                 </audio>
 
-                <div className="flex space-x-3">
+                <div className="flex space-x-3 mt-2">
                   <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setRecordedAudio(null);
-                      setCurrentQuestion(currentQuestion);
-                    }}
-                  >
-                    Re-record
-                  </Button>
+                      variant="outline" 
+                      onClick={() => {
+                        setRecordedAudio(null);
+                        setRecordedBlob(null);
+                        setProcessingQueue((prev) =>
+                          prev.filter(item => item.questionIndex !== currentQuestion)
+                        );
+                        setScores((prev) =>
+                          prev.filter((_, idx) => idx !== currentQuestion)
+                        );
+                        setAnswers((prev) =>
+                          prev.filter((_, idx) => idx !== currentQuestion)
+                        );
+                        setShowTranscript(false);
+                      }}
+                    >
+                      Re-record
+                    </Button>
+
                   <Button 
                     size="lg" 
                     onClick={processAnswer}
@@ -336,6 +388,9 @@ export const VoiceQuiz = () => {
               </div>
             )}
 
+
+            
+
             {isProcessing && (
               <div className="space-y-6 p-8">
                 <div className="w-24 h-24 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4">
@@ -346,6 +401,17 @@ export const VoiceQuiz = () => {
                   <p className="text-sm text-muted-foreground mb-4">
                     AI is analyzing your speech patterns, tone, and content
                   </p>
+                  {processingQueue.length > 0 && (
+                    <>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Remaining in queue: {processingQueue.length}
+                      </p>
+                      <Progress
+                        value={((questions.length - processingQueue.length) / questions.length) * 100}
+                        className="h-2"
+                      />
+                    </>
+                  )}
                 </div>
                 
                 <div className="space-y-3 text-left">
